@@ -1,0 +1,81 @@
+# Example
+
+This is an example of how to make an "R markdown", or `Rmd` document using a 
+mixture of \LaTeX, `R` and `python` code.
+
+You can do all of this in Rstudio, but you don't have to.  I wrote this 
+using [neovim](http://www.neovim.io) with the [Rmarkdown plugin](https://github.com/vim-pandoc/vim-rmarkdown).
+
+With any `vim`alike, to generate the `pdf` file while working, the following `normal` mode commands do the trick:
+
+```
+:RMarkdown pdf
+:!evince example.pdf &
+```
+
+The second command starts my `pdf` viewer and backgrounds it.  Then, whenever I `:RMarkdown pdf` after 
+some edits, the `pdf` automagically updates.
+
+There are a lot of widgets needed to get this working:
+
+* `R` and many packages: `knitr`, `reticulate`, and a bunch of others.
+* \LaTeX
+* [Image Magick](https://imagemagick.org/) for the `svg` to `png` conversion.
+* Probably others.
+
+This setup allows you to write notes and only keep the `Rmd` files on `GitHub`. With the
+[fugitive](https://github.com/tpope/vim-fugitive) plugin for `vim`, I never have to 
+leave the editor.
+
+```{r setup, echo=F}
+# allow Python to be used
+library(reticulate)
+
+# update as appropriate for your system.
+use_python("/usr/bin/python3")
+```
+
+# Examples of using msprime
+
+A coalescent tree under the usual assumptions will look something like Figure \ref{fig.trees}.
+
+```{python, echo=F}
+import msprime
+ts = msprime.simulate(10, random_seed=42)
+nl = {i:f"{j.time:.2f}" for i,j in enumerate(ts.tables.nodes)}
+t = next(ts.trees())
+# Need x here to store some string output that the draw
+# command returns, else it gets printed to our notes
+x=t.draw(path="tree.svg", format="svg",node_labels=nl,height=400,width=400)
+```
+
+```{r trees,fig.align="center",out.width="5in",fig.cap="\\label{fig.trees}A genealogy for 10 alleles.  The nodes are labelled by time, with 0 being the present.  Times are in units of generations divided by population size (N)",echo=F}
+# This block creates a figure that is the \figure environment
+# from LaTeX
+
+# use image magick to convert the svg to png
+system("convert tree.svg tree.png")
+# Display the converted image
+knitr::include_graphics("tree.png")
+```
+
+The expected time to the most recent common ancestor of $n$ alleles is $2\left(1-\frac{1}{n}\right)$, in units of $2N$ generations.
+However, the distribution is quite variable--see Figure \ref{fig.tmrca}.
+
+```{python, echo=F}
+import numpy as np
+nreps=10000
+tmrca = np.zeros(nreps)
+for i, ts in enumerate(msprime.simulate(10, random_seed=666, num_replicates=nreps)):
+    tmrca[i] = ts.tables.nodes.time[ts.first().roots[0]]
+
+# convert time scale from msprime to that of the eq'n we gave.
+tmrca /= 2.0
+```
+
+```{r, echo=F, fig.cap="\\label{fig.tmrca}Mean tmrca for $n=10$"}
+hist(py$tmrca, xlab="TMRCA", ylab="Number",main="")
+```
+
+The mean TMRCA in Figure \ref{fig.tmrca} is `r mean(py$tmrca)` and the expectation is `r 2*(1-1/10)`.
+
